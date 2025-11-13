@@ -126,8 +126,9 @@ const pathsEqual = (a?: NodeData["path"], b?: NodeData["path"]): boolean => {
 export const NodeModal = ({ opened, onClose }: ModalProps) => {
   const nodeData = useGraph(state => state.selectedNode);
   const setSelectedNode = useGraph(state => state.setSelectedNode);
+  const nodes = useGraph(state => state.nodes);
 
-  const normalized = useMemo(() => normalizeNodeData(nodeData?.text ?? []), [nodeData?.text]);
+  const normalized = useMemo(() => normalizeNodeData(nodeData?.text ?? []), [nodeData]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => normalized);
@@ -161,6 +162,21 @@ export const NodeModal = ({ opened, onClose }: ModalProps) => {
     // when node switches, exit editing mode
     setIsEditing(false);
   }, [normalized]);
+
+  // Keep the selected node in sync with graph updates (e.g., after save/parse)
+  useEffect(() => {
+    if (!nodeData?.path || !Array.isArray(nodes) || nodes.length === 0) return;
+
+    const matched = nodes.find(n => pathsEqual(n.path, nodeData.path));
+    if (!matched) return;
+
+    // Update selection if reference or content changed
+    const currentText = JSON.stringify(nodeData.text ?? []);
+    const nextText = JSON.stringify(matched.text ?? []);
+    if (nodeData !== matched || currentText !== nextText) {
+      setSelectedNode(matched);
+    }
+  }, [nodes, nodeData?.path, nodeData?.text, setSelectedNode]);
 
   return (
     <Modal size="auto" opened={opened} onClose={onClose} centered withCloseButton={false}>
@@ -233,12 +249,10 @@ export const NodeModal = ({ opened, onClose }: ModalProps) => {
                         }
 
                         // write back using existing pipeline so graph/editor refresh
-                        useFile
-                          .getState()
-                          .setContents({
-                            contents: JSON.stringify(newRoot, null, 2),
-                            hasChanges: true,
-                          });
+                        useFile.getState().setContents({
+                          contents: JSON.stringify(newRoot, null, 2),
+                          hasChanges: true,
+                        });
                         // keep modal open but exit edit mode; graph/editor will refresh via pipeline
                         setIsEditing(false);
 
